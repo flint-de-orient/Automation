@@ -8,8 +8,10 @@ import {
   Search,
   LogOut,
   Menu,
+  BookOpen,
+  CalendarDays,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar } from "@/components/Avatar";
@@ -21,21 +23,42 @@ import { cn } from "@/lib/utils";
 
 const mainNav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/leads", label: "Leads Box", icon: BookOpen },
   { to: "/inbox", label: "Unified Inbox", icon: InboxIcon },
   { to: "/contacts", label: "Contacts", icon: Users },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
+  { to: "/schedule-leads", label: "Schedule Leads", icon: CalendarDays },
 ];
 
 const channelNav = [
   { to: "/inbox/whatsapp", label: "WhatsApp", channel: "whatsapp" as const, count: 3 },
   { to: "/inbox/facebook", label: "Facebook", channel: "facebook" as const, count: 1 },
   { to: "/inbox/instagram", label: "Instagram", channel: "instagram" as const, count: 3 },
-  { to: "/inbox/email", label: "Email", channel: "email" as const, count: 1 },
+  { to: "/inbox/email", label: "Email", channel: "email" as const, count: 0 },
 ];
 
 export default function AppLayout() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const [profile, setProfile] = useState({ name: "", email: "", avatarColor: "from-violet-400 to-fuchsia-500" });
+
+  const fetchProfile = () => {
+    fetch("http://localhost:5000/profile")
+      .then((r) => r.json())
+      .then((data) => setProfile({
+        name: data.name ?? "",
+        email: data.email ?? "",
+        avatarColor: data.avatarColor ?? "from-violet-400 to-fuchsia-500",
+      }))
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchProfile();
+    // Re-fetch whenever window gets focus (e.g. after saving in Settings)
+    window.addEventListener("focus", fetchProfile);
+    return () => window.removeEventListener("focus", fetchProfile);
+  }, []);
 
   const SidebarContent = () => (
     <>
@@ -64,6 +87,13 @@ export default function AppLayout() {
               {item.label}
             </NavLink>
           ))}
+          <button
+            onClick={() => { window.open("/schedule", "_blank"); setOpen(false); }}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          >
+            <CalendarDays className="h-4 w-4" />
+            Schedule
+          </button>
         </nav>
 
         <div>
@@ -104,22 +134,24 @@ export default function AppLayout() {
       </div>
 
       <div className="border-t border-sidebar-border p-3">
-        <div className="flex items-center gap-3 rounded-lg p-2">
-          <Avatar name="Alex Chen" color="from-violet-400 to-fuchsia-500" size={36} />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold">Alex Chen</p>
-            <p className="truncate text-xs text-muted-foreground">admin@unibox.app</p>
+        <button
+          onClick={() => navigate("/settings")}
+          className="flex w-full items-center gap-3 rounded-lg p-2 transition-colors hover:bg-sidebar-accent"
+        >
+          <Avatar name={profile.name || "?"} color={profile.avatarColor} size={36} />
+          <div className="min-w-0 flex-1 text-left">
+            <p className="truncate text-sm font-semibold">{profile.name}</p>
+            <p className="truncate text-xs text-muted-foreground">{profile.email}</p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => navigate("/login")}
+          <span
+            role="button"
             aria-label="Log out"
+            onClick={(e) => { e.stopPropagation(); navigate("/login"); }}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-sidebar-accent"
           >
             <LogOut className="h-4 w-4" />
-          </Button>
-        </div>
+          </span>
+        </button>
       </div>
     </>
   );
@@ -173,8 +205,10 @@ export default function AppLayout() {
           </div>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto bg-aurora">
-          <Outlet />
+        <main className="min-h-0 flex-1 overflow-hidden bg-aurora">
+          <div className="h-full">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

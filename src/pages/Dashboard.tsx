@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, TrendingUp, Users, MessageSquare, CheckCircle2 } from "lucide-react";
 import { ChannelIcon } from "@/components/ChannelIcon";
@@ -7,9 +8,29 @@ import { Channel, channelMeta, leads } from "@/data/mockLeads";
 import { formatRelative } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
+const API = "http://localhost:5000";
 const channels: Channel[] = ["whatsapp", "facebook", "instagram", "email"];
 
 export default function Dashboard() {
+  const [counts, setCounts] = useState<Record<Channel, number>>({
+    whatsapp: 0, facebook: 0, instagram: 0, email: 0,
+  });
+
+  useEffect(() => {
+    Promise.allSettled([
+      fetch(`${API}/conversations`).then((r) => r.json()),
+      fetch(`${API}/fb/conversations`).then((r) => r.json()),
+      fetch(`${API}/wp/conversations`).then((r) => r.json()),
+    ]).then(([emailRes, fbRes, wpRes]) => {
+      setCounts({
+        email:     emailRes.status === "fulfilled" && Array.isArray(emailRes.value) ? emailRes.value.length : 0,
+        facebook:  fbRes.status === "fulfilled"    && Array.isArray(fbRes.value)    ? fbRes.value.length    : 0,
+        whatsapp:  wpRes.status === "fulfilled"    && Array.isArray(wpRes.value)    ? wpRes.value.length    : 0,
+        instagram: leads.filter((l) => l.channel === "instagram").length,
+      });
+    }).catch(() => {});
+  }, []);;
+
   const stats = [
     { label: "Total leads", value: leads.length.toString(), delta: "+12%", icon: Users },
     { label: "Open conversations", value: "24", delta: "+8%", icon: MessageSquare },
@@ -54,9 +75,8 @@ export default function Dashboard() {
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {channels.map((ch) => {
-            const list = leads.filter((l) => l.channel === ch);
-            const unread = list.reduce((a, l) => a + l.unread, 0);
-            const meta = channelMeta[ch];
+            const count = counts[ch];
+            const meta  = channelMeta[ch];
             return (
               <Link
                 key={ch}
@@ -70,12 +90,12 @@ export default function Dashboard() {
                   <ArrowUpRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
                 </div>
                 <p className="mt-4 text-sm font-medium text-muted-foreground">{meta.label}</p>
-                <p className="mt-0.5 text-2xl font-bold tracking-tight">{list.length} leads</p>
+                <p className="mt-0.5 text-2xl font-bold tracking-tight">{count} leads</p>
                 <div className="mt-3 flex items-center gap-2">
-                  {unread > 0 ? (
-                    <Badge className="bg-primary text-primary-foreground">{unread} unread</Badge>
-                  ) : (
+                  {count === 0 ? (
                     <Badge variant="secondary">All caught up</Badge>
+                  ) : (
+                    <Badge className="bg-primary text-primary-foreground">{count} active</Badge>
                   )}
                 </div>
               </Link>

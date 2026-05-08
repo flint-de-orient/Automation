@@ -1,23 +1,87 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Search, Download } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { ChannelIcon } from "@/components/ChannelIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Channel, channelMeta, leads } from "@/data/mockLeads";
+import { Channel, channelMeta } from "@/data/mockLeads";
 import { formatRelative } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+const API = "http://localhost:5000";
 const channels: (Channel | "all")[] = ["all", "whatsapp", "facebook", "instagram", "email"];
 
+const colorPalette = [
+  "from-rose-400 to-pink-500",
+  "from-amber-400 to-orange-500",
+  "from-emerald-400 to-teal-500",
+  "from-sky-400 to-indigo-500",
+  "from-violet-400 to-fuchsia-500",
+  "from-lime-400 to-green-500",
+  "from-cyan-400 to-blue-500",
+  "from-red-400 to-rose-500",
+];
+const pickColor = (s: string) => colorPalette[Math.abs([...s].reduce((a, c) => a + c.charCodeAt(0), 0)) % colorPalette.length];
+
+interface UnifiedContact {
+  id: string;
+  name: string;
+  handle: string;
+  avatarColor: string;
+  channel: Channel;
+  status: string;
+  tags: string[];
+  assignedTo?: string;
+  lastMessageAt: string;
+}
+
 export default function Contacts() {
-  const [query, setQuery] = useState("");
-  const [active, setActive] = useState<Channel | "all">("all");
+  const [query, setQuery]     = useState("");
+  const [active, setActive]   = useState<Channel | "all">("all");
+  const [contacts, setContacts] = useState<UnifiedContact[]>([]);
+
+  useEffect(() => {
+    const toContact = (channel: Channel, id: string, name: string, handle: string, ts: string): UnifiedContact => ({
+      id: `${channel}-${id}`,
+      name: name || handle,
+      handle,
+      avatarColor: pickColor(id),
+      channel,
+      status: "open",
+      tags: [],
+      lastMessageAt: ts,
+    });
+
+    Promise.allSettled([
+      fetch(`${API}/conversations`).then((r) => r.json()),
+      fetch(`${API}/fb/conversations`).then((r) => r.json()),
+      fetch(`${API}/wp/conversations`).then((r) => r.json()),
+    ]).then(([emailRes, fbRes, wpRes]) => {
+      const all: UnifiedContact[] = [];
+
+      if (emailRes.status === "fulfilled" && Array.isArray(emailRes.value))
+        emailRes.value.forEach((c: { email: string; name: string; lastTimestamp: string }) =>
+          all.push(toContact("email", c.email, c.name, c.email, c.lastTimestamp))
+        );
+
+      if (fbRes.status === "fulfilled" && Array.isArray(fbRes.value))
+        fbRes.value.forEach((c: { senderId: string; name: string; lastTimestamp: string }) =>
+          all.push(toContact("facebook", c.senderId, c.name, c.senderId, c.lastTimestamp))
+        );
+
+      if (wpRes.status === "fulfilled" && Array.isArray(wpRes.value))
+        wpRes.value.forEach((c: { number: string; name: string; lastTimestamp: string }) =>
+          all.push(toContact("whatsapp", c.number, c.name, c.number, c.lastTimestamp))
+        );
+
+      setContacts(all);
+    }).catch(() => toast.error("Failed to load contacts"));
+  }, []);
 
   const filtered = useMemo(() => {
-    let list = leads;
+    let list = contacts;
     if (active !== "all") list = list.filter((l) => l.channel === active);
     if (query.trim()) {
       const q = query.toLowerCase();
@@ -28,13 +92,16 @@ export default function Contacts() {
           l.tags.some((t) => t.toLowerCase().includes(q))
       );
     }
-    return list;
-  }, [query, active]);
+    return [...list].sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+  }, [contacts, query, active]);
 
   const exportCSV = () => {
     const rows = [
       ["Name", "Handle", "Channel", "Status", "Tags", "Assigned", "Last activity"],
-      ...filtered.map((l) => [l.name, l.handle, l.channel, l.status, l.tags.join("|"), l.assignedTo ?? "", l.lastMessageAt]),
+      ...filtered.map((l) => [
+        l.name, l.handle, l.channel, l.status,
+        l.tags.join("|"), l.assignedTo ?? "", l.lastMessageAt,
+      ]),
     ];
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -88,7 +155,7 @@ export default function Contacts() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-elegant">
-        {/* Mobile: list */}
+        {/* Mobile */}
         <ul className="divide-y divide-border md:hidden">
           {filtered.map((l) => {
             const meta = channelMeta[l.channel];
@@ -107,7 +174,7 @@ export default function Contacts() {
           })}
         </ul>
 
-        {/* Desktop: table */}
+        {/* Desktop */}
         <table className="hidden w-full text-sm md:table">
           <thead className="border-b border-border bg-secondary/50 text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
@@ -150,8 +217,12 @@ export default function Contacts() {
                       {l.tags.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs">{l.assignedTo ?? <span className="text-muted-foreground">Unassigned</span>}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{formatRelative(l.lastMessageAt)}</td>
+                  <td className="px-4 py-3 text-xs">
+                    {l.assignedTo ?? <span className="text-muted-foreground">Unassigned</span>}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground">
+                    {formatRelative(l.lastMessageAt)}
+                  </td>
                 </tr>
               );
             })}

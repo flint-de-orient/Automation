@@ -20,17 +20,55 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+const API = "http://localhost:5000";
+
+const emailColors = [
+  "from-rose-400 to-pink-500",
+  "from-amber-400 to-orange-500",
+  "from-emerald-400 to-teal-500",
+  "from-sky-400 to-indigo-500",
+  "from-violet-400 to-fuchsia-500",
+];
+
 export default function Inbox() {
   const { channel } = useParams<{ channel?: Channel }>();
   const navigate = useNavigate();
-  const [leads, setLeads] = useState<Lead[]>(seedLeads);
+  const [leads, setLeads] = useState<Lead[]>(seedLeads.filter((l) => l.channel !== "email"));
+  const [emailLeads, setEmailLeads] = useState<Lead[]>([]);
+
+  // Fetch email leads from MongoDB
+  useEffect(() => {
+    fetch(`${API}/conversations`)
+      .then((r) => r.json())
+      .then((data: { email: string; name: string; lastMessage: string; lastTimestamp: string }[]) => {
+        if (!Array.isArray(data)) return;
+        const mapped: Lead[] = data.map((c, i) => ({
+          id: `email-${c.email}`,
+          name: c.name,
+          handle: c.email,
+          avatarColor: emailColors[i % emailColors.length],
+          channel: "email" as Channel,
+          lastMessage: c.lastMessage,
+          lastMessageAt: c.lastTimestamp,
+          unread: 0,
+          status: "open" as const,
+          tags: [],
+          messages: [],
+          notes: [],
+        }));
+        setEmailLeads(mapped);
+      })
+      .catch(() => {});
+  }, []);
   const [query, setQuery] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [showDetails, setShowDetails] = useState(false);
 
+  const allLeads = useMemo(() => [...leads, ...emailLeads], [leads, emailLeads]);
+
   const filtered = useMemo(() => {
-    let list = leads;
+    let list = allLeads;
     if (channel) list = list.filter((l) => l.channel === channel);
     if (query.trim()) {
       const q = query.toLowerCase();
@@ -43,7 +81,7 @@ export default function Inbox() {
       );
     }
     return [...list].sort((a, b) => +new Date(b.lastMessageAt) - +new Date(a.lastMessageAt));
-  }, [leads, channel, query]);
+  }, [allLeads, channel, query]);
 
   // Auto-select first
   useEffect(() => {
@@ -53,7 +91,7 @@ export default function Inbox() {
     }
   }, [filtered, activeId]);
 
-  const active = leads.find((l) => l.id === activeId) ?? null;
+  const active = allLeads.find((l) => l.id === activeId) ?? null;
 
   const sendMessage = () => {
     if (!draft.trim() || !active) return;
@@ -192,7 +230,13 @@ export default function Inbox() {
             return (
               <li key={lead.id}>
                 <button
-                  onClick={() => setActiveId(lead.id)}
+                  onClick={() => {
+                    if (lead.channel === "email") {
+                      navigate(`/inbox/email`);
+                    } else {
+                      setActiveId(lead.id);
+                    }
+                  }}
                   className={cn(
                     "flex w-full items-start gap-3 border-b border-border/60 p-3 text-left transition-colors",
                     isActive ? "bg-accent/60" : "hover:bg-accent/30"
