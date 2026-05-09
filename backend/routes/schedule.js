@@ -1,24 +1,11 @@
-const express = require("express");
-const mongoose = require("mongoose");
-const router = express.Router();
-
-const scheduleSchema = new mongoose.Schema(
-  {
-    name:  { type: String, required: true },
-    phone: { type: String, required: true },
-    date:  { type: String, required: true },
-    time:  { type: String, required: true },
-  },
-  { timestamps: true }
-);
-
-const Schedule = mongoose.models.Schedule || mongoose.model("Schedule", scheduleSchema, "shedule");
+const express  = require("express");
+const Schedule = require("../models/Schedule");
+const router   = express.Router();
 
 router.post("/", async (req, res) => {
   const { name, phone, date, time } = req.body;
-  if (!name || !phone || !date || !time) {
+  if (!name || !phone || !date || !time)
     return res.status(400).json({ error: "All fields are required" });
-  }
   try {
     const entry = await Schedule.create({ name, phone, date, time });
     console.log("[POST /api/schedule] Saved:", entry);
