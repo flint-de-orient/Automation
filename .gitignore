@@ -13,11 +13,10 @@ dist-ssr
 *.local
 
 # Environment / secrets
-.env
-.env.*
-backend/.env
-!.env.example
-!backend/.env.example
+# NOTE: .env files are intentionally tracked in this repo for easy VPS deploys.
+# Keep this repo private — pushing it public would leak credentials.
+.env.local
+.env.*.local
 
 # Local agent / tool state
 .claude/
