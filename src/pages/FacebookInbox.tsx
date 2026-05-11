@@ -151,45 +151,24 @@ export default function FacebookInbox() {
     const text = draft.trim();
     setDraft("");
 
+    // Split "Fdo Makan" -> first_name="Fdo", last_name="Makan"
     const trimmedName = (activeName ?? "").trim();
     const parts = trimmedName.length ? trimmedName.split(/\s+/) : [];
     const first_name = parts[0] ?? "";
     const last_name  = parts.slice(1).join(" ");
 
-    // 1) Send to webhook first
     try {
-      const hookRes = await fetch(N8N_FB_WEBHOOK, {
+      await fetch(N8N_FB_WEBHOOK, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sender_id: activeSenderId, first_name, last_name, message: text }),
+        body: JSON.stringify({
+          sender_id: activeSenderId,
+          first_name,
+          last_name,
+          message: text,
+        }),
       });
-      if (!hookRes.ok) toast.error(`Webhook returned ${hookRes.status}`);
-    } catch {
-      toast.error("Webhook unreachable (check n8n / CORS)");
-    }
-
-    // 2) Save to DB and show in chatbox
-    try {
-      const saved = await fetch(`${API}/fb/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ senderId: activeSenderId, name: activeName, message: text, sender: "ai" as const }),
-      }).then((r) => r.json());
-
-      if (saved?.success) {
-        setMessages((prev) => [...prev, saved.data]);
-        setConversations((prev) =>
-          prev.map((c) => c.senderId === activeSenderId
-            ? { ...c, lastMessage: text, lastTimestamp: new Date().toISOString() }
-            : c
-          )
-        );
-      } else {
-        toast.error("Failed to save message");
-      }
-    } catch {
-      toast.error("Failed to save message");
-    }
+    } catch { toast.error("Failed to send message"); }
   };
 
   const addTag = () => {

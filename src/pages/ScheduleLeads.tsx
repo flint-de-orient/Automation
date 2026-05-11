@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { CalendarDays, Phone, User, Clock, RefreshCw, Inbox } from "lucide-react";
+import { API_URL } from "@/lib/api";
 
 interface ScheduleEntry {
   _id: string;
@@ -26,7 +27,7 @@ export default function ScheduleLeads() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:5000/api/schedule");
+      const res = await fetch(`${API_URL}/api/schedule`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setLeads(data);

@@ -1,10 +1,15 @@
 const WpMessage = require("../models/WpMessage");
 
+const BAD_STRINGS = ["", "null", "undefined", "Null", "NULL", "Undefined", "UNDEFINED"];
+
 const getWpConversations = async (req, res) => {
   try {
     const conversations = await WpMessage.aggregate([
-      { $match: { number: { $exists: true, $ne: null, $ne: "" } } },
+      // Drop docs where number is missing or literally "null"/"undefined"
+      { $match: { number: { $exists: true, $nin: [null, ...BAD_STRINGS] } } },
       { $addFields: { number: { $trim: { input: "$number" } } } },
+      // After trim, drop again and require at least one digit
+      { $match: { number: { $nin: BAD_STRINGS }, $expr: { $regexMatch: { input: "$number", regex: /\d/ } } } },
       { $sort: { timestamp: -1 } },
       {
         $group: {
@@ -14,7 +19,14 @@ const getWpConversations = async (req, res) => {
           lastTimestamp: { $first: "$timestamp" },
         },
       },
-      { $match: { _id: { $ne: null, $ne: "" } } },
+      { $match: { _id: { $nin: [null, ...BAD_STRINGS] } } },
+      // Blank out "null"/"undefined" names and messages so the frontend shows fallbacks
+      {
+        $addFields: {
+          name: { $cond: [{ $in: [{ $ifNull: ["$name", ""] }, BAD_STRINGS] }, "", "$name"] },
+          lastMessage: { $cond: [{ $in: [{ $ifNull: ["$lastMessage", ""] }, BAD_STRINGS] }, "", "$lastMessage"] },
+        },
+      },
       { $sort: { lastTimestamp: -1 } },
       {
         $project: {

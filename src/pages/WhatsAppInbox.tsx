@@ -7,7 +7,7 @@ import { formatRelative, formatTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const API = "http://localhost:5000";
+import { API_URL as API } from "@/lib/api";
 const N8N_WP_WEBHOOK = "https://n8n.flintdeorient.in/webhook-test/whatsapp";
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -39,6 +39,14 @@ const colors = [
   "from-violet-400 to-fuchsia-500",
 ];
 const avatarColor = (s: string) => colors[(s || "a").charCodeAt(0) % colors.length];
+
+// Treat "null"/"undefined" strings (from bad upstream data) as missing.
+const clean = (s: string | null | undefined): string => {
+  const t = (s ?? "").trim();
+  return t === "" || t.toLowerCase() === "null" || t.toLowerCase() === "undefined" ? "" : t;
+};
+const displayName = (c: { name?: string | null; number: string }) =>
+  clean(c.name) || c.number;
 
 // ── AttachmentMenu ─────────────────────────────────────────────
 function AttachmentMenu({
@@ -379,17 +387,17 @@ export default function WhatsAppInbox() {
           {filtered.length === 0 && <li className="p-8 text-center text-sm text-gray-400">No conversations yet.</li>}
           {filtered.map((conv) => (
             <li key={conv.number}>
-              <button onClick={() => { setActiveNumber(conv.number); setActiveName(conv.name); }}
+              <button onClick={() => { setActiveNumber(conv.number); setActiveName(clean(conv.name)); }}
                 style={{ borderBottom: "1px solid #f0f2f5" }}
                 className={cn("flex w-full items-center gap-3 px-4 py-3 text-left transition-colors",
                   activeNumber === conv.number ? "bg-[#f0f2f5]" : "hover:bg-[#f5f6f6]")}>
-                <Avatar name={conv.name || conv.number} color={avatarColor(conv.number)} size={46} />
+                <Avatar name={displayName(conv)} color={avatarColor(conv.number)} size={46} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between">
-                    <p className="truncate text-[15px] font-medium text-gray-900">{conv.name || conv.number}</p>
+                    <p className="truncate text-[15px] font-medium text-gray-900">{displayName(conv)}</p>
                     <span style={{ fontSize: "12px", color: "#667781" }}>{formatRelative(conv.lastTimestamp)}</span>
                   </div>
-                  <p className="truncate text-[13px]" style={{ color: "#667781" }}>{conv.lastMessage}</p>
+                  <p className="truncate text-[13px]" style={{ color: "#667781" }}>{clean(conv.lastMessage)}</p>
                 </div>
               </button>
             </li>
@@ -413,9 +421,9 @@ export default function WhatsAppInbox() {
               <button className="md:hidden mr-1 text-gray-500" onClick={() => setActiveNumber(null)}>
                 <X className="h-5 w-5" />
               </button>
-              <Avatar name={active.name || active.number} color={avatarColor(active.number)} size={40} />
+              <Avatar name={displayName(active)} color={avatarColor(active.number)} size={40} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] font-medium text-gray-900">{active.name || active.number}</p>
+                <p className="truncate text-[15px] font-medium text-gray-900">{displayName(active)}</p>
                 <p className="truncate text-xs" style={{ color: "#667781" }}>{active.number}</p>
               </div>
             </div>

@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const API = "http://localhost:5000";
+import { API_URL as API } from "@/lib/api";
 const channels: Channel[] = ["whatsapp", "facebook", "instagram", "email"];
 
 export default function Settings() {

@@ -1,4 +1,7 @@
 const FbMessage = require("../models/FbMessage");
+const axios = require("axios");
+
+const N8N_FB_WEBHOOK = "https://n8n.flintdeorient.in/webhook/facebooksender";
 
 const getFbConversations = async (req, res) => {
   try {
@@ -81,4 +84,17 @@ const saveFbMessage = async (req, res) => {
   }
 };
 
-module.exports = { getFbConversations, getFbMessages, saveFbMessage };
+const sendToWebhook = async (req, res) => {
+  try {
+    const { sender_id, first_name, last_name, message } = req.body;
+    if (!sender_id || !message) return res.status(400).json({ error: "sender_id and message are required" });
+
+    const hookRes = await axios.post(N8N_FB_WEBHOOK, { sender_id, first_name, last_name, message });
+    return res.status(hookRes.status).json(hookRes.data);
+  } catch (err) {
+    console.error("[POST /fb/send] webhook error:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+module.exports = { getFbConversations, getFbMessages, saveFbMessage, sendToWebhook };

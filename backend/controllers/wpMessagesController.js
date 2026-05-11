@@ -1,5 +1,15 @@
 const WpMessage = require("../models/WpMessage");
 
+// Treat "null"/"undefined" strings (from upstream JSON-as-text mistakes) as missing.
+const isBadString = (v) => {
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "" || s === "null" || s === "undefined";
+};
+const firstValid = (...vals) => {
+  for (const v of vals) if (!isBadString(v)) return String(v).trim();
+  return "";
+};
+
 const getWpMessages = async (req, res) => {
   try {
     // Accept both /wp/messages?number=... and /wp/messages/:number
@@ -9,11 +19,21 @@ const getWpMessages = async (req, res) => {
 
     if (!number) return res.status(400).json({ error: "number is required" });
 
-    const messages = await WpMessage.find({
+    const raw = await WpMessage.find({
       $expr: { $eq: [{ $trim: { input: "$number" } }, number] }
     })
       .sort({ timestamp: 1 })
-      .select("sender message image timestamp -_id");
+      .select("sender message image timestamp -_id")
+      .lean();
+
+    // Drop messages that are pure garbage ("null"/"undefined" text and no image)
+    const messages = raw
+      .map((m) => ({
+        ...m,
+        message: isBadString(m.message) ? "" : m.message,
+        image:   isBadString(m.image)   ? null : m.image,
+      }))
+      .filter((m) => m.message || m.image);
 
     console.log(`[GET /wp/messages] ${messages.length} messages for ${number}`);
     return res.json(messages);
@@ -25,16 +45,16 @@ const getWpMessages = async (req, res) => {
 const saveWpMessage = async (req, res) => {
   try {
     // Accept number / from / waId / phone from n8n
-    const number  = (req.body.number || req.body.from || req.body.waId || req.body.phone || "").trim();
-    const name    = (req.body.name   || req.body.pushName || "").trim();
-    const message = (req.body.message || req.body.text || req.body.body || "").trim();
-    const image   = req.body.image || null;
+    const number  = firstValid(req.body.number, req.body.from, req.body.waId, req.body.phone);
+    const name    = firstValid(req.body.name, req.body.pushName);
+    const message = firstValid(req.body.message, req.body.text, req.body.body);
+    const image   = isBadString(req.body.image) ? null : req.body.image;
     const sender  = req.body.sender || "user";
 
     console.log("BODY:", req.body);
 
-    if (!number || (!message && !image)) {
-      return res.status(400).json({ error: "number and either message or image are required" });
+    if (!number || !/\d/.test(number) || (!message && !image)) {
+      return res.status(400).json({ error: "valid number and either message or image are required" });
     }
     if (!["user", "ai"].includes(sender)) {
       return res.status(400).json({ error: "sender must be 'user' or 'ai'" });

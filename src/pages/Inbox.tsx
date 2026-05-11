@@ -20,7 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const API = "http://localhost:5000";
+import { API_URL as API } from "@/lib/api";
 
 const emailColors = [
   "from-rose-400 to-pink-500",

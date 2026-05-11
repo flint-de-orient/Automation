@@ -12,6 +12,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { io } from "socket.io-client";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar } from "@/components/Avatar";
@@ -20,6 +21,9 @@ import { Input } from "@/components/ui/input";
 import { ChannelIcon } from "@/components/ChannelIcon";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { API_URL } from "@/lib/api";
+
+type ChannelKey = "whatsapp" | "facebook" | "instagram" | "email";
 
 const mainNav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -30,20 +34,23 @@ const mainNav = [
   { to: "/schedule-leads", label: "Schedule Leads", icon: CalendarDays },
 ];
 
-const channelNav = [
-  { to: "/inbox/whatsapp", label: "WhatsApp", channel: "whatsapp" as const, count: 3 },
-  { to: "/inbox/facebook", label: "Facebook", channel: "facebook" as const, count: 1 },
-  { to: "/inbox/instagram", label: "Instagram", channel: "instagram" as const, count: 3 },
-  { to: "/inbox/email", label: "Email", channel: "email" as const, count: 0 },
+const channelNav: { to: string; label: string; channel: ChannelKey }[] = [
+  { to: "/inbox/whatsapp", label: "WhatsApp", channel: "whatsapp" },
+  { to: "/inbox/facebook", label: "Facebook", channel: "facebook" },
+  { to: "/inbox/instagram", label: "Instagram", channel: "instagram" },
+  { to: "/inbox/email", label: "Email", channel: "email" },
 ];
 
 export default function AppLayout() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const [profile, setProfile] = useState({ name: "", email: "", avatarColor: "from-violet-400 to-fuchsia-500" });
+  const [counts, setCounts] = useState<Record<ChannelKey, number>>({
+    whatsapp: 0, facebook: 0, instagram: 0, email: 0,
+  });
 
   const fetchProfile = () => {
-    fetch("http://localhost:5000/profile")
+    fetch(`${API_URL}/profile`)
       .then((r) => r.json())
       .then((data) => setProfile({
         name: data.name ?? "",
@@ -53,11 +60,52 @@ export default function AppLayout() {
       .catch(() => {});
   };
 
+  const fetchCounts = async () => {
+    const endpoints: Record<Exclude<ChannelKey, "instagram">, string> = {
+      whatsapp: `${API_URL}/wp/conversations`,
+      facebook: `${API_URL}/fb/conversations`,
+      email:    `${API_URL}/conversations`,
+    };
+    const entries = Object.entries(endpoints) as [Exclude<ChannelKey, "instagram">, string][];
+    const results = await Promise.allSettled(
+      entries.map(([key, url]) =>
+        fetch(url)
+          .then((r) => (r.ok ? r.json() : []))
+          .then((data) => [key, Array.isArray(data) ? data.length : 0] as const)
+      )
+    );
+    setCounts((prev) => {
+      const next = { ...prev };
+      for (const r of results) {
+        if (r.status === "fulfilled") {
+          const [k, n] = r.value;
+          next[k] = n;
+        }
+      }
+      return next;
+    });
+  };
+
   useEffect(() => {
     fetchProfile();
-    // Re-fetch whenever window gets focus (e.g. after saving in Settings)
+    fetchCounts();
     window.addEventListener("focus", fetchProfile);
-    return () => window.removeEventListener("focus", fetchProfile);
+    window.addEventListener("focus", fetchCounts);
+
+    // Live updates via socket — backend broadcasts these events on every save
+    const socket = io(API_URL, { transports: ["websocket", "polling"] });
+    socket.on("conversation_updated", fetchCounts);     // WhatsApp
+    socket.on("fb_conversation_updated", fetchCounts);  // Facebook
+
+    // Fallback polling every 30s in case socket misses an event
+    const poll = setInterval(fetchCounts, 30000);
+
+    return () => {
+      window.removeEventListener("focus", fetchProfile);
+      window.removeEventListener("focus", fetchCounts);
+      socket.disconnect();
+      clearInterval(poll);
+    };
   }, []);
 
   const SidebarContent = () => (
@@ -119,12 +167,12 @@ export default function AppLayout() {
                   <ChannelIcon channel={item.channel} className={cn("h-4 w-4", `text-${item.channel}`)} />
                   {item.label}
                 </span>
-                {item.count > 0 && (
+                {counts[item.channel] > 0 && (
                   <Badge
                     variant="secondary"
                     className="h-5 min-w-5 justify-center rounded-full bg-primary/10 px-1.5 text-[11px] font-semibold text-primary"
                   >
-                    {item.count}
+                    {counts[item.channel]}
                   </Badge>
                 )}
               </NavLink>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { User, Phone, Calendar, Clock, ArrowRight, MapPin, Star, CheckCircle } from "lucide-react";
+import { API_URL } from "@/lib/api";
 
 const GOLD = "#c9a227";
 const GOLD_GLOW = "rgba(201,162,39,0.18)";
@@ -65,7 +66,7 @@ export default function Schedule() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:5000/api/schedule", {
+      const res = await fetch(`${API_URL}/api/schedule`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

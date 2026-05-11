@@ -10,7 +10,7 @@ import { formatRelative } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const API = "http://localhost:5000";
+import { API_URL as API } from "@/lib/api";
 const channels: (Channel | "all")[] = ["all", "whatsapp", "facebook", "instagram", "email"];
 
 const colorPalette = [

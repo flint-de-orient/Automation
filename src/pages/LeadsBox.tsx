@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 
-const API = "http://localhost:5000";
+import { API_URL as API } from "@/lib/api";
 
 interface ChannelCard {
   label: string;
