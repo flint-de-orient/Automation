@@ -13,10 +13,11 @@ dist-ssr
 *.local
 
 # Environment / secrets
+.env
 .env.*
-!.env
+backend/.env
 !.env.example
-!backend/.env
+!backend/.env.example
 
 # Local agent / tool state
 .claude/
